@@ -95,9 +95,9 @@ impl Mul<Multiplier> for Multiplier {
         let mul1: f32 = self.into();
         let mul2: f32 = _rhs.into();
         let num = mul1 * mul2;
-        if (num - 0.125).abs() <= EPSILON {
+        if (num - 0.125).abs() <= EPSILON || (num - 0.0625).abs() <= EPSILON {
             Multiplier::DoubleResistance
-        } else if (num - 8.0).abs() <= EPSILON {
+        } else if (num - 8.0).abs() <= EPSILON || (num - 16.0).abs() <= EPSILON {
             Multiplier::DoubleWeakness
         } else {
             Multiplier::from_num_multiplier(num).unwrap()
@@ -300,7 +300,21 @@ impl Typing {
 #[cfg(test)]
 mod tests {
     #[allow(unused_imports)]
-    use super::*;    
+    use super::*;
+    #[test]
+    fn test_multiplication() {
+        assert_eq!(Multiplier::DoubleResistance * Multiplier::DoubleResistance,
+                   Multiplier::DoubleResistance);
+        assert_eq!(Multiplier::DoubleResistance * Multiplier::Resistance,
+                   Multiplier::DoubleResistance);
+        assert_eq!(Multiplier::DoubleResistance * Multiplier::Regular, Multiplier::DoubleResistance);
+        assert_eq!(Multiplier::Weakness * Multiplier::Resistance, Multiplier::Regular);
+        assert_eq!(Multiplier::Weakness * Multiplier::DoubleResistance, Multiplier::Resistance);
+        assert_eq!(Multiplier::DoubleWeakness * Multiplier::DoubleWeakness,
+                   Multiplier::DoubleWeakness);
+        assert_eq!(Multiplier::DoubleWeakness * Multiplier::Weakness, Multiplier::DoubleWeakness);
+        assert_eq!(Multiplier::DoubleWeakness * Multiplier::Resistance, Multiplier::Weakness);
+    }
     #[test]
     fn test_offense_multipliers() {
         assert_eq!(Typing::Ground.offense_multiplier(Typing::Flying), Multiplier::Immunity);
@@ -338,5 +352,52 @@ mod tests {
         assert_eq!(Typing::Grass.resistant_against(),
                    vec![Typing::Flying, Typing::Poison, Typing::Bug, Typing::Steel, Typing::Fire,
                         Typing::Grass, Typing::Dragon]);
+    }
+    #[test]
+    fn test_immune_against() {
+        assert_eq!(Typing::Ghost.immune_against(), vec![Typing::Normal]);
+        assert_eq!(Typing::Electric.immune_against(), vec![Typing::Ground]);
+    }
+    #[test]
+    fn test_weak_to() {
+        assert_eq!(Typing::Grass.weak_to(),
+                   vec![Typing::Flying, Typing::Poison, Typing::Bug, Typing::Fire, Typing::Ice]);
+        assert_eq!(Typing::Rock.weak_to(),
+                   vec![Typing::Fighting, Typing::Ground, Typing::Steel, Typing::Water, Typing::Grass]);
+    }
+    #[test]
+    fn test_neutral_to() {
+        assert_eq!(Typing::Steel.neutral_to(),
+                   vec![Typing::Ghost, Typing::Water, Typing::Electric, Typing::Dark]);
+        assert_eq!(Typing::Fire.neutral_to(),
+                   vec![Typing::Normal, Typing::Fighting, Typing::Flying, Typing::Poison, Typing::Ghost,
+                        Typing::Electric, Typing::Psychic, Typing::Dragon, Typing::Dark]);        
+    }
+    #[test]
+    fn test_resitant_to() {
+        assert_eq!(Typing::Poison.resistant_to(),
+                   vec![Typing::Fighting, Typing::Poison, Typing::Bug, Typing::Grass, Typing::Fairy]);
+        assert_eq!(Typing::Dragon.resistant_to(),
+                   vec![Typing::Fire, Typing::Water, Typing::Grass, Typing::Electric]);
+    }
+    #[test]
+    fn test_immune_to() {
+        assert_eq!(Typing::Ghost.immune_to(),
+                   vec![Typing::Normal, Typing::Fighting]);
+        assert_eq!(Typing::Flying.immune_to(),
+                   vec![Typing::Ground]);
+    }
+    #[test]
+    fn test_combined_multipliers() {
+        assert_eq!(Typing::Ice.combined_effectiveness((Typing::Ground, Typing::Flying)),
+                   Multiplier::DoubleWeakness);
+        assert_eq!(Typing::Bug.combined_effectiveness((Typing::Rock, Typing::Dark)),
+                   Multiplier::Weakness);
+        assert_eq!(Typing::Electric.combined_effectiveness((Typing::Grass, Typing::Flying)),
+                   Multiplier::Regular);
+        assert_eq!(Typing::Water.combined_effectiveness((Typing::Dragon, Typing::Steel)),
+                   Multiplier::Resistance);
+        assert_eq!(Typing::Fighting.combined_effectiveness((Typing::Psychic, Typing::Fairy)),
+                   Multiplier::DoubleResistance);
     }
 }
