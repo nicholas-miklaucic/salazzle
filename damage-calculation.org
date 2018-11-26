@@ -1,0 +1,414 @@
+#+TITLE: Damage Calculation in Gen VII
+* Compedium
+Damage calculation requires a lot of knowledge about the battle: the Pokemon games are interesting
+in part because everything interacts with everything else, but it makes encapsulation a
+nightmare. This is my best attempt to construct a list of everything that the Pokemon engine needs
+to compute damage. This is mostly taken from [[https://bulbapedia.bulbagarden.net/wiki/Damage#Damage_calculation][Bulbapedia]].
+** The Regular Case (moves that deal damage in the normal way)
+*** Levels
+The levels of the Pokemon involved in the attack.
+*** Attacking Stat
+The attacking stat(s) of the Pokemon involved in the attack, including stat changes.
+*** Defending Stat
+The defending stat(s) of the Pokemon involved in the attack, including stat changes.
+*** Base Power
+The base power of the move used, assuming it has one.
+*** Number of Targets
+Moves deal 0.75 damage if they hit more than one target. Not appicable in single battles.
+*** Weather
+Fire-type moves deal 50% more in sun and half as much in rain, and ditto for Water-type moves in
+sun. Fire-type moves do nothing in heavy rain, and Water-type moves do nothing in harsh
+sunlight. "Mysterious air currents" reduce type effectiveness against Flying.
+*** Critical Hit
+Moves deal 50% more if they are a critical hit, and additionally ignore stat stages that would
+decrease their damage. Additionally, all screens are ignored, although Burn's attack drop is still
+factored in. If the attacking Pokemon has Sniper, then there is an additional 50% multiplier.
+*** STAB
+If the user shares a typing with the move, there is an additional 50% bonus (100% if the pokemon has Adaptability).
+*** Burn
+If the attacking pokemon is using a physical move besides Facade and does not have Guts, then their
+attack is cut in half.
+*** Random Damage Range Value
+There is a randomly generated percentage between 85% and 100% inclusive that is applied after all of
+the other calculations.
+** Abilities That Affect Damage
+*** Fluffy
+Attacks against Pokemon with Fluffy deal half damage if the used move makes contact and is not
+Fire-type, and deal double damage if the used move is Fire-type and not contact.
+*** Filter, Solid Rock, Prism Armor
+Super-effective attacks against Pokemon with Filter, Solid Rock, or Prism Armor deal 75% damage.
+*** Friend Guard
+Attacks against Pokemon with an ally with Friend Guard deal 75% damage.
+*** Multiscale, Shadow Shield
+Attacks against Multiscale or Shadow Shield Pokemon with full health deal half damage.
+*** Sniper
+Critical hits by Pokemon with Sniper deal an extra 50%.
+*** Tinted Lens
+Not very effective attacks from a Pokemon with Tinted Lens deal double damage.
+*** -Ate Abilities
+Each of Aerilate, Refrigerate, Pixilate, and Normalize convert used moves to their type before
+giving a 20% power boost.
+*** Disguise
+Attacks against a Pokemon with Disguise deal no damage, but break the disguise.
+*** Soundproof
+Immune to sound-based moves
+*** Bulletproof
+Immune to ball moves, bomb moves, and some other blast attacks.
+*** Wonder Skin
+Status moves have 50% accuracy.
+*** Dazzling/Queenly Majesty
+Blocks priority moves aimed at the user.
+*** Overcoat
+Blocks powder-based moves.
+*** Unaware
+Ignores stat stages.
+*** Sturdy
+Immune to OHKO moves; guaranteed to live with 1 HP if attack would kill it.
+*** Type Multiplier Abilities
+This is just the ability, multiplier, and type in a table:
+| Ability       | Type             | Multiplier | Effect                              |
+|---------------+------------------+------------+-------------------------------------|
+| Dry Skin      | Water            |          0 | Restores 1/4 max HP                 |
+| Dry Skin      | Fire             |       1.25 |                                     |
+| Flash Fire    | Fire             |          0 |                                     |
+| Heatproof     | Fire             |        0.5 | Also reduces burn damage            |
+| Levitate      | Ground           |          0 | Pokemon is flying for all purposes  |
+| Sap Sipper    | Grass            |          0 |                                     |
+| Lightning Rod | Electric         |          0 | Redirects                           |
+| Motor Drive   | Electric         |          0 | Increases Speed by 1 stage          |
+| Volt Absorb   | Electric         |          0 | Restores 1/4 max HP                 |
+| Water Absorb  | Water            |          0 | Restores 1/4 max HP                 |
+| Water Bubble  | Fire             |        0.5 | Immune to burns                     |
+| Wonder Guard  | All non-SE Types |          0 |                                     |
+| Storm Drain   | Water            |          0 | Redirects; increases SpA by 1 stage |
+| Thick Fat     | Fire             |        0.5 |                                     |
+| Thick Fat     | Ice              |        0.5 |                                     |
+*** Mold Breaker/Turboblaze/Teravolt
+Mold Breaker nullifies most abilities in damage calculation. There are some edge cases:
+ - Lightning Rod and Storm Drain divert the moves of their types, but don't protect the holder!
+ - Phazing moves ignore abilities that reduce entry hazard damage. This includes Simple, Contrary,
+   Clear Body, and White Smoke with Sticky Web, and Leaf Guard and Flower Veil with Toxic
+   Spikes. Additionally, Levitate is ignored.
+ - Things it ignores:
+   - Allied abilities
+   - Battle Armor, Clear Body, Damp, Dry Skin, Filter, Flash Fire, Flower Gift, Heatproof, Hyper
+     Cutter, Immunity, Inner Focus, Insomnia, Keen Eye, Leaf Guard, Levitate, Lightning Rod, Limber,
+     Magma Armor, Marvel Scale, Motor Drive, Oblivious, Own Tempo, Sand Veil, Shell Armor, Shield
+     Dust, Simple, Snow Cloak, Solid Rock, Soundproof, Sticky Hold, Storm Drain, Sturdy, Suction
+     Cups, Tangled Feet, Thick Fat, Unaware, Vital Spirit, Volt Absorb, Water Absorb, Water Veil,
+     White Smoke, Wonder Guard 
+   - Big Pecks, Contrary, Friend Guard, Heavy Metal, Light Metal, Magic Bounce, Multiscale, Sap Sipper, Telepathy, Wonder Skin.
+   - Aroma Veil, Bulletproof, Flower Veil, Fur Coat, Overcoat, Sweet Veil
+   - Dazzling, Disguise, Fluffy, Queenly Majesty, Water Bubble
+ - Things it doesn't:
+   - Aura Break, Magic Guard, Comatose, Shields Down, Full Metal Body, Shadow Shield, and Prism Armor
+** Moves That Affect Damage (not including semi-invulnerable turns)
+The semi-invulnerable turns are discussed below.
+*** Light Screen, Reflect and Aurora Veil
+Special attacks (for Light Screen) or physical attacks (for Reflect) that are not critical hits and
+not used by an Infiltrator Pokemon deal half damage to targets with a Light Screen. Aurora Veil is
+equivalent to having both.
+*** Protect (Detect is exactly the same)
+Invalidates all direct damage, except from the following moves. Moves with an asterisk also break
+Protect's effect for the rest of the turn.
+ - Curse (Ghost-type)
+ - Doom Desire
+ - Feint*
+ - Future Sight
+ - Hyperspace Fury*
+ - Hyperspace Hole*
+ - Phantom Force*
+ - Shadow Force*
+Additionally, the following moves all work, although they don't deal direct damage:
+ - Acupressure
+ - Aromatic Mist
+ - Bestow
+ - Block
+ - Confide
+ - Conversion 2
+ - Hold Hands
+ - Mean Look
+ - Perish Song
+ - Play Nice
+ - Psych Up
+ - Roar
+ - Role Play
+ - Sketch
+ - Spider Web
+ - Tearful Look
+ - Transform
+ - Whirlwind
+Z-moves deal quarter damage against targets with Protect.
+*** Protect Multiplier
+The multiplier starts at 1, and is divided by 3 each time Protect, Detect, Endure, Wide Guard, Quick
+Guard, Spiky Shield, or Baneful Bunker are used consecutively. The minimum chance is 1/729. Resets
+to 1 if none of those moves are used in a turn.
+*** Protect-Like Moves
+**** Endure
+Uses the same multiplier as Protect, but instead ensures that the Pokemon survives with 1 HP. Future
+Sight and Doom Desire hit after this move and so bypass it.
+**** Quick Guard
+Like Protect, but only for moves with increased priority that do not go through Protect. Uses the
+same multiplier as the other protect moves, but isn't itself affected by it.
+**** Wide Guard
+Protects against moves that target more than one Pokemon in doubles battles, including status. Has
+the same multiplier stuff as Quick Guard.
+**** King's Shield
+Drops Attack of Pokemon that use contact moves against it by 2 stages, excepting the moves that go
+through Protect, with lifting effects as Protect has. Damaging Z-moves completely bypass it.
+**** Baneful Bunker
+Like King's Shield, but instead of dropping Attack by 2 it poisons the enemy.
+**** Spiky Shield
+Like Protect, but deals 1/8 of max HP to Pokemon that make contact with it. Has the same moves that
+go through it and lift its effects. Also makes Z-Moves deal 25% damage.
+** Moves That Deal Double Damage to Minimized Pokemon
+This doesn't really affect OU, because of Evasion Clause, but still:
+ - Body Slam
+ - Dragon Rush
+ - Flying Press
+ - Heat Crash
+ - Heavy Slam
+ - Phantom Force
+ - Shadow Force
+ - Stomp
+** Moves That Interact With Semi-Invulnerable Turns
+In each of the next four cases, the move deals double damage if hitting a target in the semi-invulnerable state of the
+associated move. No Guard on either the attacker or defender also invalidate the invulnerability,
+but don't deal extra damage. (This also applies to Fly, Bounce, and Sky Drop.)
+ - Earthquake with Dig
+ - Magnitude with Dig
+ - Surf with Dive
+ - Whirlpool with Dive
+** Moves That Can Hit Pokemon During the Flying Semi-Invulnerable Turns
+The moves this refers to are Fly, Bounce, and Sky Drop. These moves don't get a multiplier unless
+specifically noted.
+ - Smack Down (cancels move)
+ - Thousand Arrows (cancels move)
+ - Any move after Lock-On or Mind Reader
+ - Hurricane
+ - Sky Uppercut
+ - Gust (deals double damage)
+ - Twister (deals double damage)
+** Items That Affect Damage
+*** Absorb Bulb
+Increases SpA by one stage when hit with a Water-type move.
+*** Air Balloon
+Gives Ground-type immunity and flying status; expires when hit by another attack.
+*** Assault Vest
+Raises SpD of holder by 50%.
+*** Big Root
+Increases HP restoration from draining moves by 30%. Does not increase damage.
+*** Binding Band
+Doubles partial trapping damage from 1/16 to 1/8.
+*** Bright Powder
+Reduces opponent's accuracy by 10% for moves targeted at it.
+*** Cell Battery
+Increases SpA by one stage when hit with an Electric-type move.
+*** Choice Items
+Scarf increases Spe, Band increases Atk, and Specs increases SpA by 50%, Choice-locking the user.
+*** Deep Sea Scale
+Doubles SpD of Clamperl.
+*** Deep Sea Tooth
+Doubles SpA of Clamperl.
+*** Eject Button
+Forces the holder to switch out when hit. Bypasses trapping moves.
+*** Eviolite
+Increases Def and SpD by 50% if holder is not fully evolved.
+*** Expert Belt
+20% multiplier if used for a super effective move.
+*** Float Stone
+Halves weight of holder.
+*** Focus Band
+Gives 10% chance to endure hit.
+*** Focus Sash
+Endures with 1 HP if OHKO'd. Consumes after that.
+*** Grip Claw
+Causes binding moves to last for 7 turns.
+*** Iron Ball
+Halves Speed and grounds.
+*** King's Rock/Razor Fang
+Causes 10% flinch chance for damage-dealing moves without a flinch chance.
+*** Lagging Tail
+Forces the user to move last in its priority bracket. Ignores Trick Room.
+*** Life Orb
+30% multiplier, deducts 10% of HP.
+*** Light Ball
+Doubles both Atk and SpA.
+*** Light Clay
+Makes screens last for 8 turns.
+*** Lucky Punch
+Increases Chansey critical hit ratio by 2 stages.
+*** Metronome
+Multiplier of 1 + 0.2 per consecutive use of the same move, never exceeding 2
+*** Muscle Band
+Increases physical damage by 10%.
+*** Power Herb
+Causes two-turn moves to complete in one turn.
+*** Protective Pads
+Ignores contact effects.
+*** Quick Claw
+Gives 20% chance to move first in priority bracket. Ignores Trick Room.
+*** Razor Claw
+Increases crit ratio by 1 stage.
+*** Red Card
+Forces opponent to switch on attack.
+*** Resistance Berries
+Chilan Berry resists all Normal-type damage by half. Other Berries only work if the attack used is
+super effective.
+*** Ring Target
+Removes type immunities.
+*** Rocky Helmet
+Contact moves will cause 1/6 max HP damage to user.
+*** Safety Goggles
+Gives immunity to weather-related damage and powder moves.
+*** Scope Lens
+Increases crit ratio by 1 stage.
+*** Shed Shell
+Ignores trapping effects.
+*** Snowball
+Increases Atk by 1 stage when hit with an Ice-type move.
+*** Stick
+Increases Farfetch'd critical hit ratio by 2 stages.
+*** Sticky Barb
+Deals 1/8 max HP a turn: transfers on contact if opponent has no held item.
+*** Terrain Extender
+Makes terrains last for 8 turns.
+*** Thick Club
+If held by Cubone or Marowak, doubles Atk.
+*** Type-Enhancing Gems
+These work on the /called/ move if the move used ends up using another move (e.g.,
+Metronome). Similarly, moves that have their type changed use the type they were changed to. They
+increase the damage by 30% and are then consumed. Fling fails if the user has a gem, and the Pledges
+and Struggle don't account for them. Fixed-damage moves consume the Gem but don't actually get stronger.
+*** Type-Enhancing Items
+These give a 20% boost if the attack has their matching type.
+*** Weather Extenders
+Makes weather last for 8 turns.
+*** Wide Lens
+Boosts accuracy by 10%.
+*** Wise Glasses
+Increases special damage by 10%.
+*** Zoom Lens
+Boosts accuracy by 20% if user moves after target.
+* Move Use Algorithm
+The goal of this part is to synthesize the above information and other info sources to come up with
+a sequence of steps to use a move.
+** Moves that deal direct damage
+If the move is one of Bide, Counter, Endeavor, Final Gambit, Guardian of Alola, Metal Burst, Mirror
+Coat, Nature's Madness, Night Shade, Psywave, Seismic Toss, Dragon Rage, Sonic Boom, Fissure,
+Guillotine, Horn Drill, Sheer Cold, or Super Fang:
+ - Determine if the move's typing allows it to hit its target
+ - Compute accuracy as required
+ - If the move hits, then compute damage specially as required
+** Normal damage-dealing moves 
+*** Determine whether the move will hit
+First, make sure the opponent is not in a semi-invulnerable state. If so, consider those effects.
+If the move cannot miss, then ignore this step.
+**** No Guard
+No Guard makes all moves hit. Ignore the rest.
+**** Stat Stages
+Consider attacker's accuracy stages and opponent's evasion stat stages. If the attacker has Unaware,
+ignore evasion; if the defender does, ignore accuracy.
+**** Bright Powder
+Decreases user's accuracy by 10%.
+**** Sand Veil/Snow Cloak
+Decreases accuracy by 80% in sand or hail, respectively.
+**** Wide Lens/Zoom Lens
+Wide Lens increases accuracy by 10%. Zoom Lens is 20%, but only if the opponent went first.
+**** Compound Eyes
+Increases accuracy by 30% multiplicatively.
+
+If the move will hit, continue:
+*** Level
+Get the attacking Pokemon's level.
+*** Attacking Power
+Compute the power of the attacking move. This can vary by weight, friendship, HP, held item, stat
+changes, PP, team stats, etc., so there's no fixed way to do this. Each move can have its own way of
+doing it.
+
+Factors outside of the move itself that affect the power:
+ - Charge boosts the power of the next Electric-type move to double damage
+ - Helping Hand and Me First give 50% boosts
+ - Terrains have their effects
+ - Mud Sport and Water Sport have their effects
+ - Adaptability, Aerilate, Analytic, Battery, Battle Bond, Flare Boost, Galvanize, Iron Fist, Mega
+   Launcher, Neuroforce, Normalize, Pixilate, Reckless, Refrigerate, Rivalry, Sand Force, Sheer
+   Force, Stakeout, Steelworker, Strong Jaw, Technician, Tough Claws, Toxic Boost, and Water Bubble
+   all have their effects
+ - Muscle Band, Wise Glasses, type-enhancing gems, type-enhancing incenses, type-enhancing plates,
+   the orbs, and Soul Dew all have their effects
+*** Effective Attack
+Compute Atk (if physical) or SpA (if special) with stat changes, unless defending Pokemon has
+Unaware, or only positive stat changes if a critical hit.
+*** Effective Defense
+Compute Def (if physical or special move that targets defense) or SpD (if special) with stat
+changes, unless attacking Pokemon has Unaware, or only negative stat changes if a critical hit.
+*** Compute Modifier
+Multiply each of these together.
+**** Target
+0.75 if hitting more than one target, 1 otherwise.
+**** Weather
+1.5 for Water-type in rain or Fire-type in sun; 0.5 for Water-type in sun or Fire-type in rain; 0
+for Water-type in extremely harsh sunlight or for Fire-type in heavy rain.
+**** Critical Hit
+The chance, depending on crit stage:
+| Stage | Chance |
+|-------+--------|
+|     0 | 1/24   |
+|     1 | 1/8    |
+|     2 | 1/2    |
+|    3+ | 1      |
+Crit stage is increased by 1 if the move increases it, or from Razor Claw, Scope Lens, and Super
+Luck. Increased by 2 for 10,000,000 Volt Thunderbolt, Stick, Lucky Punch, Focus Energy, Dire Hit,
+Lansat, Z-Foresight, Z-Sleep Talk, Z-Tailwind, Z-Acupressure, and Z-Heart Swap.
+
+Guaranteed crit for certain moves.
+
+If crit, 1.5 multiplier: 1 otherwise.
+**** Damage Range
+Generate a random integer from 85 to 100 inclusive and divide by 100.
+**** STAB
+1.5 if the user shares a type with the move, 2 if additionally user has Adaptability, and 1 otherwise.
+**** Type Effectiveness
+Computed using the type-effectiveness abilities and normal typing multipliers.
+**** Burn
+0.5 if user is using a physical move that is not Facade and is burned, 1 otherwise.
+**** Other
+***** Minimize Multipliers
+2 if using a move that does extra against Minimize.
+***** Semi-Invulnerable Turns
+2 if using a move that deals extra against targets in semi-invulnerable states.
+***** Screens
+0.5 if Light Screen and special, Reflect and physical, or Aurora Veil. Infiltrator removes this, as
+does some moves that break screens. Critical hits ignore this as well.
+***** Fluffy
+0.5 if contact non-Fire move, 2 if Fire non-contact move. Mold Breaker nullifies.
+***** Filter/Prism Armor/Solid Rock
+0.75 if defender is weak; Mold Breaker nullifies.
+***** Multiscale/Shadow Shield
+0.5 if defender is at full health.
+***** Sniper
+1.5 if this move is a critical hit.
+***** Tinted Lens
+2 if this move is resisted
+***** Friend Guard
+0.75 if ally has it; nullified by Mold Breaker
+***** Z-Move
+If Z-move that deals damage and target Protected, 0.25
+***** Chilan Berry
+0.5 if Normal-type
+***** Expert Belt
+1.2 if SE
+***** Life Orb
+1.3
+***** Metronome
+1 + 0.2 per consecutive use of the same move, capped at 2
+***** Type-resist Berries
+0.5 if applicable
+
+*** Protect
+If the defender has protection, compute whether it applies and do things accordingly.
+
+
+Given all of this, the damage formula is then
+((((0.4 * level) + 2) * power * a/d) / 50 + 2) * modifier.
