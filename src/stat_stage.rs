@@ -36,11 +36,11 @@ impl StatStage {
     pub fn normal_multiplier(self) -> f64 {
         if self < StatStage::Z0 {
             let numer: f64 = 2.0;
-            let denom: f64 = 2.0 + (self as i8) as f64;
+            let denom: f64 = 2.0 - f64::from(self as i8);
             numer / denom
         } else {
             // Z0 works in this case as expected, so include it
-            let numer: f64 = 2.0 + (self as i8) as f64;
+            let numer: f64 = 2.0 + f64::from(self as i8);
             let denom: f64 = 2.0;
             numer / denom
         }
@@ -51,11 +51,11 @@ impl StatStage {
     pub fn accuracy_multiplier(self) -> f64 {
         if self < StatStage::Z0 {
             let numer: f64 = 3.0;
-            let denom: f64 = 3.0 + (self as i8) as f64;
+            let denom: f64 = 3.0 - f64::from(self as i8);
             numer / denom
         } else {
             // Z0 works in this case as expected, so include it
-            let numer: f64 = 3.0 + (self as i8) as f64;
+            let numer: f64 = 3.0 + f64::from(self as i8);
             let denom: f64 = 3.0;
             numer / denom
         }
@@ -112,5 +112,29 @@ mod tests {
         assert_eq!(StatStage::P4 as i8, 4i8);
         assert_eq!(StatStage::P5 as i8, 5i8);
         assert_eq!(StatStage::P6 as i8, 6i8);
+    }
+
+    #[test]
+    fn test_normal_multiplier() {
+        assert!((StatStage::N3.normal_multiplier() - (2. / 5.)).abs() <= 1e-10);
+        assert!((StatStage::P4.normal_multiplier() - (6. / 2.)).abs() <= 1e-10);
+        assert!((StatStage::Z0.normal_multiplier() - 1.).abs() <= 1e-10);
+    }
+
+    #[test]
+    fn test_acc_multiplier() {
+        assert!((StatStage::N3.accuracy_multiplier() - (3. / 6.)).abs() <= 1e-10);
+        assert!((StatStage::P4.accuracy_multiplier() - (7. / 3.)).abs() <= 1e-10);
+        assert!((StatStage::Z0.accuracy_multiplier() - 1.).abs() <= 1e-10);
+    }
+
+    #[test]
+    fn test_addition() {
+        assert_eq!(StatStage::N3 + StatStage::N4, StatStage::N6);
+        assert_eq!(StatStage::N3 + StatStage::N1, StatStage::N4);
+        assert_eq!(StatStage::N3 + StatStage::P2, StatStage::N1);
+        assert_eq!(StatStage::N3 + StatStage::P3, StatStage::Z0);
+        assert_eq!(StatStage::P1 + StatStage::P1, StatStage::P2);
+        assert_eq!(StatStage::P4 + StatStage::P5, StatStage::P6);
     }
 }
