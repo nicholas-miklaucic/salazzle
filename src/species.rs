@@ -1308,8 +1308,6 @@ impl Species {
             _ => false            
         }
     }
-
-
     // TODO: implement generic "get string of underlying forme" using Box?
 }
 

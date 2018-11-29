@@ -8,6 +8,9 @@ pub mod stat;
 pub mod typing;
 pub mod nature;
 pub mod species;
+pub mod terrain;
+pub mod weather;
+pub mod stat_stage;
 
 #[cfg(test)]
 mod tests {

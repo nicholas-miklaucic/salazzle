@@ -21,8 +21,8 @@ impl Weather {
     /// that it does not persist on switching out, and it suppresses non-special weathers.
     pub fn is_special(self) -> bool {
         match self {
-            HeavyRain | HarshSun | StrongWinds => true,
-            _ => false
+            Weather::HeavyRain | Weather::HarshSun | Weather::StrongWinds => true,
+            _ => false,
         }
     }
 }
